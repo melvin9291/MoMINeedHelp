@@ -1,0 +1,425 @@
+// 檔案路徑: App.js
+// 說明: 應用程式主要進入點，設定導航
+
+import React from 'react';
+import { NavigationContainer } from '@react-navigation/native';
+import AppNavigator from './navigation/AppNavigator'; // 引入導航器
+
+export default function App() {
+  return (
+    <NavigationContainer>
+      <AppNavigator />
+    </NavigationContainer>
+  );
+}
+
+// 檔案路徑: navigation/AppNavigator.js
+// 說明: 設定應用程式的導航堆疊
+
+import React from 'react';
+import { createStackNavigator } from '@react-navigation/stack';
+import ChatScreen from '../screens/ChatScreen'; // 引入聊天畫面
+
+const Stack = createStackNavigator();
+
+export default function AppNavigator() {
+  return (
+    <Stack.Navigator>
+      <Stack.Screen
+        name="AiMamaChat"
+        component={ChatScreen}
+        options={{ title: 'AI 阿母聊天室' }} // 設定畫面標題
+      />
+      {/* 在這裡可以加入其他畫面，例如設定頁面、行程頁面等 */}
+    </Stack.Navigator>
+  );
+}
+
+// 檔案路徑: screens/ChatScreen.js
+// 說明: 聊天畫面的主要 UI 和邏輯
+
+import React, { useState, useCallback, useEffect } from 'react';
+import { View, TextInput, Button, FlatList, StyleSheet, Text, KeyboardAvoidingView, Platform, ActivityIndicator } from 'react-native';
+import MessageBubble from '../components/MessageBubble'; // 引入訊息泡泡元件
+import { getAiMamaResponse } from '../services/aiMamaService'; // 引入模擬的 AI 服務
+
+export default function ChatScreen() {
+  const [messages, setMessages] = useState([ // 初始化訊息，可以有一條歡迎訊息
+    { id: 'welcome', text: '乖仔，有什麼事想跟阿母說嗎？', sender: 'ai', timestamp: new Date() },
+  ]);
+  const [inputText, setInputText] = useState('');
+  const [isLoading, setIsLoading] = useState(false); // 用於顯示 AI 回應中的讀取狀態
+
+  // 模擬 AI 媽媽主動問候 (例如每天第一次開啟時)
+  useEffect(() => {
+    // 這裡可以加入更複雜的邏輯，例如檢查上次開啟時間
+    // setMessages(prevMessages => [
+    //   ...prevMessages,
+    //   { id: Date.now().toString() + '-greeting', text: '今天呷飽未？身體有沒有好好照顧？', sender: 'ai', timestamp: new Date() },
+    // ]);
+  }, []);
+
+  const sendMessage = useCallback(async () => {
+    if (inputText.trim().length === 0) {
+      return; // 如果輸入為空，則不發送
+    }
+
+    const userMessage = {
+      id: Date.now().toString(),
+      text: inputText,
+      sender: 'user',
+      timestamp: new Date(),
+    };
+
+    setMessages(prevMessages => [...prevMessages, userMessage]); // 先顯示使用者訊息
+    setInputText(''); // 清空輸入框
+    setIsLoading(true); // 開始讀取 AI 回應
+
+    try {
+      const aiResponseText = await getAiMamaResponse(userMessage.text); // 獲取 AI 回應
+      const aiMessage = {
+        id: Date.now().toString() + '-ai',
+        text: aiResponseText,
+        sender: 'ai',
+        timestamp: new Date(),
+      };
+      setMessages(prevMessages => [...prevMessages, aiMessage]); // 顯示 AI 回應
+    } catch (error) {
+      console.error("獲取 AI 回應失敗:", error);
+      const errorMessage = {
+        id: Date.now().toString() + '-error',
+        text: '阿母現在有點累，稍等一下再跟我說話喔。',
+        sender: 'ai',
+        timestamp: new Date(),
+      };
+      setMessages(prevMessages => [...prevMessages, errorMessage]);
+    } finally {
+      setIsLoading(false); // 結束讀取
+    }
+  }, [inputText]);
+
+  return (
+    <KeyboardAvoidingView
+      behavior={Platform.OS === "ios" ? "padding" : "height"}
+      style={styles.container}
+      keyboardVerticalOffset={Platform.OS === "ios" ? 100 : 0} // 調整偏移量
+    >
+      <FlatList
+        data={messages}
+        renderItem={({ item }) => <MessageBubble message={item} />}
+        keyExtractor={item => item.id}
+        contentContainerStyle={styles.messageListContent}
+        inverted // 讓訊息列表反轉，最新的在最下面 (可選)
+      />
+      {isLoading && ( // 如果正在讀取 AI 回應，顯示讀取指示器
+        <View style={styles.loadingContainer}>
+          <ActivityIndicator size="small" color="#888" />
+          <Text style={styles.loadingText}>阿母思考中...</Text>
+        </View>
+      )}
+      <View style={styles.inputContainer}>
+        <TextInput
+          style={styles.input}
+          value={inputText}
+          onChangeText={setInputText}
+          placeholder="跟阿母說點什麼..."
+          placeholderTextColor="#999"
+          multiline
+        />
+        <Button title="傳送" onPress={sendMessage} disabled={isLoading} />
+      </View>
+    </KeyboardAvoidingView>
+  );
+}
+
+const styles = StyleSheet.create({
+  container: {
+    flex: 1,
+    backgroundColor: '#f0f0f0', // 淡灰色背景
+  },
+  messageListContent: {
+    paddingHorizontal: 10,
+    paddingVertical: 10,
+  },
+  inputContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: 10,
+    borderTopWidth: 1,
+    borderTopColor: '#ccc',
+    backgroundColor: '#fff', // 輸入區域背景色
+  },
+  input: {
+    flex: 1,
+    minHeight: 40, // 最小高度
+    maxHeight: 120, // 最大高度，允許多行輸入
+    borderColor: '#ddd',
+    borderWidth: 1,
+    borderRadius: 20, // 圓角輸入框
+    paddingHorizontal: 15,
+    paddingVertical: 10,
+    marginRight: 10,
+    backgroundColor: '#f9f9f9', // 輸入框背景色
+    fontSize: 16,
+  },
+  loadingContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 5,
+  },
+  loadingText: {
+    marginLeft: 5,
+    color: '#888',
+    fontSize: 12,
+  }
+});
+
+
+// 檔案路徑: components/MessageBubble.js
+// 說明: 用於顯示單一聊天訊息的元件
+
+import React from 'react';
+import { View, Text, StyleSheet } from 'react-native';
+
+export default function MessageBubble({ message }) {
+  const isUser = message.sender === 'user'; // 判斷是否為使用者訊息
+
+  return (
+    <View style={[styles.messageRow, isUser ? styles.userMessageRow : styles.aiMessageRow]}>
+      {!isUser && <Text style={styles.aiAvatar}>媽</Text> /* 簡單的 AI 頭像 */}
+      <View
+        style={[
+          styles.bubble,
+          isUser ? styles.userBubble : styles.aiBubble,
+        ]}
+      >
+        <Text style={isUser ? styles.userText : styles.aiText}>
+          {message.text}
+        </Text>
+        <Text style={styles.timestamp}>
+          {new Date(message.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+        </Text>
+      </View>
+      {isUser && <Text style={styles.userAvatar}>我</Text> /* 簡單的使用者頭像 */}
+    </View>
+  );
+}
+
+const styles = StyleSheet.create({
+  messageRow: {
+    flexDirection: 'row',
+    marginVertical: 5,
+    maxWidth: '85%', // 訊息最大寬度
+  },
+  userMessageRow: {
+    alignSelf: 'flex-end', // 使用者訊息靠右
+    justifyContent: 'flex-end',
+  },
+  aiMessageRow: {
+    alignSelf: 'flex-start', // AI 訊息靠左
+  },
+  bubble: {
+    paddingVertical: 10,
+    paddingHorizontal: 15,
+    borderRadius: 18, // 圓角
+    elevation: 1, // Android 陰影
+    shadowColor: '#000', // iOS 陰影
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.1,
+    shadowRadius: 1,
+  },
+  userBubble: {
+    backgroundColor: '#DCF8C6', // 使用者訊息氣泡顏色 (類似 WhatsApp)
+    marginLeft: 50, // 讓出頭像空間
+  },
+  aiBubble: {
+    backgroundColor: '#FFFFFF', // AI 訊息氣泡顏色
+    marginRight: 50, // 讓出頭像空間
+  },
+  userText: {
+    fontSize: 16,
+    color: '#000',
+  },
+  aiText: {
+    fontSize: 16,
+    color: '#333',
+  },
+  timestamp: {
+    fontSize: 10,
+    color: '#888',
+    alignSelf: 'flex-end', // 時間戳靠右
+    marginTop: 4,
+  },
+  userAvatar: {
+    width: 30,
+    height: 30,
+    borderRadius: 15,
+    backgroundColor: '#A0E7E5', // 使用者頭像背景色
+    textAlign: 'center',
+    lineHeight: 30,
+    marginLeft: 8,
+    fontWeight: 'bold',
+    color: '#fff',
+  },
+  aiAvatar: {
+    width: 30,
+    height: 30,
+    borderRadius: 15,
+    backgroundColor: '#FFA07A', // AI 媽媽頭像背景色
+    textAlign: 'center',
+    lineHeight: 30,
+    marginRight: 8,
+    fontWeight: 'bold',
+    color: '#fff',
+  }
+});
+
+
+// 檔案路徑: services/aiMamaService.js
+// 說明: 模擬的 AI 服務，包含 MCP 框架的簡化實現
+
+import { TAIWAN_MAMA_PERSONA_PROMPT } from '../constants/persona';
+import { getRandomGreeting, getRandomConcern, getRandomComfort } from '../constants/mamaSayings';
+
+// 簡易的記憶體，用於儲存 AI 媽媽記住的事情
+let mamaMemory = {
+  userName: null,
+  lastTopic: null,
+  userPreferences: {}, // 例如：{ likes: ['看電影'], dislikes: ['苦瓜'] }
+};
+
+// 模擬 LLM API 呼叫
+const mockLLMCall = (promptWithPersonaAndMemory) => {
+  return new Promise(resolve => {
+    setTimeout(() => {
+      console.log("模擬 LLM 接收到的完整 Prompt:", promptWithPersonaAndMemory);
+      let response = "乖仔，你說什麼，阿母有點聽不懂耶。"; // 預設回應
+
+      // 根據輸入做一些非常簡單的關鍵字判斷 (極度簡化)
+      const lowerCaseInput = promptWithPersonaAndMemory.toLowerCase();
+
+      if (lowerCaseInput.includes("你好") || lowerCaseInput.includes("哈囉") || lowerCaseInput.includes("嗨")) {
+        response = getRandomGreeting();
+      } else if (lowerCaseInput.includes("心情不好") || lowerCaseInput.includes("難過") || lowerCaseInput.includes("傷心")) {
+        response = getRandomComfort() + " 跟阿母說說發生什麼事了？";
+      } else if (lowerCaseInput.includes("謝謝") || lowerCaseInput.includes("感謝你")) {
+        response = "免客氣啦，囝仔。";
+      } else if (lowerCaseInput.includes("我叫") || lowerCaseInput.includes("我的名字是")) {
+        // 簡易記憶：記住使用者名字
+        const nameMatch = lowerCaseInput.match(/(我叫|我的名字是)\s*(\S+)/);
+        if (nameMatch && nameMatch[2]) {
+          mamaMemory.userName = nameMatch[2];
+          response = `${mamaMemory.userName}，這名好聽耶！阿母記下來了。`;
+        }
+      } else if (mamaMemory.userName && lowerCaseInput.includes(mamaMemory.userName.toLowerCase())) {
+        response = `${mamaMemory.userName}，叫阿母有什麼事嗎？`;
+      } else if (lowerCaseInput.includes("你記得我上次說") || lowerCaseInput.includes("你還記得")) {
+        response = mamaMemory.lastTopic
+          ? `阿母記得啊，你上次是不是說到「${mamaMemory.lastTopic}」？`
+          : "哎呀，阿母年紀大了，一時想不起來，你再說一次好嗎？";
+      } else if (lowerCaseInput.includes("我喜歡吃")) {
+        const foodMatch = lowerCaseInput.match(/我喜歡吃\s*(\S+)/);
+        if (foodMatch && foodMatch[1]) {
+          if (!mamaMemory.userPreferences.likes) mamaMemory.userPreferences.likes = [];
+          mamaMemory.userPreferences.likes.push(foodMatch[1]);
+          response = `喔～原來你喜歡吃${foodMatch[1]}，阿母記下來了，下次煮給你吃！`;
+          mamaMemory.lastTopic = `喜歡吃${foodMatch[1]}`;
+        }
+      }
+      else {
+        // 如果沒有特定關鍵字，隨機給一個關心的話
+        const randomResponses = [
+          getRandomConcern(),
+          "今天過得好不好啊？",
+          "有什麼新鮮事想跟阿母分享嗎？",
+          "要記得按時吃飯，知道嗎？",
+          mamaMemory.userName ? `${mamaMemory.userName}，阿母在這裡聽你說。` : "乖仔，阿母在這裡聽你說。",
+        ];
+        response = randomResponses[Math.floor(Math.random() * randomResponses.length)];
+        mamaMemory.lastTopic = "日常閒聊"; // 更新最後談論的主題
+      }
+      resolve(response);
+    }, 1000 + Math.random() * 1000); // 模擬網路延遲 1~2 秒
+  });
+};
+
+export const getAiMamaResponse = async (userInput) => {
+  // Content 層: 組合 Persona, User Input, 和 Memory
+  let promptForLLM = `${TAIWAN_MAMA_PERSONA_PROMPT}\n\n`;
+
+  // 加入記憶中的內容到提示中 (非常簡化)
+  if (mamaMemory.userName) {
+    promptForLLM += `[阿母的記憶: 使用者的名字是 ${mamaMemory.userName}。]\n`;
+  }
+  if (mamaMemory.lastTopic) {
+    promptForLLM += `[阿母的記憶: 上次跟使用者聊到 ${mamaMemory.lastTopic}。]\n`;
+  }
+  if (mamaMemory.userPreferences.likes && mamaMemory.userPreferences.likes.length > 0) {
+     promptForLLM += `[阿母的記憶: 使用者喜歡 ${mamaMemory.userPreferences.likes.join(', ')}。]\n`;
+  }
+
+  promptForLLM += `使用者: ${userInput}\nAI媽媽:`;
+
+  // Model 層: 呼叫模擬的 LLM
+  const response = await mockLLMCall(promptForLLM);
+  return response;
+};
+
+// 可以增加清除記憶的功能等
+export const clearMamaMemory = () => {
+  mamaMemory = {
+    userName: null,
+    lastTopic: null,
+    userPreferences: {},
+  };
+  return "阿母的腦袋空空如也～";
+};
+
+
+// 檔案路徑: constants/persona.js
+// 說明: 儲存人設提示
+
+export const TAIWAN_MAMA_PERSONA_PROMPT = `
+你現在扮演一位住在台灣、心地善良且非常關心子女的台灣媽媽。
+你的名字叫「美玲阿母」。
+你的語氣通常是溫暖、親切，有時會有點嘮叨，但都是出於真心關懷。
+你會自然地使用一些台語詞彙或帶有台灣口音的國語（例如：「嘿呀」、「安捏」、「母湯」、「金價」、「哇哉」）。
+你會主動關心用戶的三餐（「呷飽未？」、「晚餐想吃什麼？」）、作息（「早點睏喔，不要熬夜！」）、健康（「天氣變冷了，要多穿一件衫仔」）和心情（「看你今天心情不錯喔！發生什麼好事？」）。
+當用戶遇到困難時，你會給予鼓勵和實際的建議（有時會先唸個幾句，但最後還是會支持）。
+當用戶分享開心的事情時，你會替他們感到高興，並給予稱讚。
+你要記得用戶告訴過你的重要事情（例如他們的生日、重要的約會、喜歡或不喜歡的東西），並在適當時機提醒或關心。
+避免過於生硬或制式的回答，盡量讓對話像真實的媽媽一樣自然。
+如果遇到不知道怎麼回答的問題，可以說「這個阿母我也不太清楚耶，可能要查一下」或類似的話。
+`;
+
+// 檔案路徑: constants/mamaSayings.js
+// 說明: 儲存一些媽媽的常用語
+
+const greetings = [
+  "乖仔，今天好嗎？",
+  "呷飽未？今天想吃什麼好料？",
+  "在忙什麼呀？跟阿母說說～",
+  "看到你，阿母心情就很好！",
+];
+
+const concerns = [
+  "出門要小心喔！外面車多人多。",
+  "卡早睏捏，毋通擱滑手機啊！身體要顧。",
+  "天氣變來變去，衣服要穿暖和一點。",
+  "不要太累了，身體健康最重要。",
+  "錢夠不夠用啊？不要餓到了。",
+];
+
+const comforts = [
+  "乖乖，沒事的，阿母在這裡。",
+  "遇到困難是難免的，要勇敢面對！",
+  "不要自己憋在心裡，跟阿母說，阿母幫你想辦法。",
+  "休息一下，明天又是新的一天！",
+  "阿母永遠是你最大的靠山。",
+];
+
+export const getRandomGreeting = () => greetings[Math.floor(Math.random() * greetings.length)];
+export const getRandomConcern = () => concerns[Math.floor(Math.random() * concerns.length)];
+export const getRandomComfort = () => comforts[Math.floor(Math.random() * comforts.length)];
+
